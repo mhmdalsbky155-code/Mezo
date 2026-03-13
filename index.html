@@ -2,90 +2,71 @@
 <html lang="ar">
 <head>
     <meta charset="UTF-8">
-    <title>ميزو الأسطوري - النسخة المصلحة</title>
+    <title>ميزو - نسخة الخضة والولاء</title>
     <style>
         body { background-color: #050505; margin: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: sans-serif; }
         .face { background: #111; padding: 50px; border-radius: 60px; border: 2px solid #333; display: flex; gap: 40px; cursor: pointer; transition: 0.5s; position: relative; }
-        .eye { width: 95px; height: 95px; background: #000; border-radius: 50%; border: 4px solid #00a2ff; display: flex; justify-content: center; align-items: center; position: relative; overflow: hidden; transition: 0.3s; }
+        .eye { width: 95px; height: 95px; background: #000; border-radius: 50%; border: 4px solid #00a2ff; display: flex; justify-content: center; align-items: center; position: relative; overflow: hidden; transition: 0.2s; }
         .pupil { width: 38px; height: 38px; background: #00f2ff; border-radius: 50%; box-shadow: 0 0 25px #00a2ff; position: absolute; transition: 0.1s; }
         .status { margin-top: 30px; color: #00a2ff; font-size: 22px; text-align: center; max-width: 85%; line-height: 1.5; font-weight: bold; min-height: 1.5em; }
         video { display: none; }
 
-        /* لعبة حجرة ورقة مقص */
-        #game-hand { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 100px; display: none; z-index: 20; text-shadow: 0 0 20px #fff; }
+        /* --- وضع الخضة (Scared) --- */
+        .face.scared { animation: shake 0.2s; border-color: #fff; box-shadow: 0 0 50px #fff; }
+        .face.scared .eye { transform: scale(1.4); border-color: #fff; }
+        @keyframes shake { 0% { left: -5px; } 50% { left: 5px; } 100% { left: 0; } }
 
-        /* التعابير */
+        /* باقي التعابير */
         .face.happy .eye { border-radius: 50% 50% 15% 15%; border-color: #00ffaa; height: 65px; transform: translateY(10px); }
-        .face.happy .pupil { background: #00ffaa; }
-        .face.sad .eye { border-radius: 15% 15% 50% 50%; border-color: #3366ff; height: 85px; }
-        .face.angry .eye { border-color: #ff3344; }
         .face.surprised .eye { transform: scale(1.2); border-color: #ffffff; }
-        .face.thinking .eye { border-color: #ffaa00; }
-        
-        /* وضع النوم 😴 */
-        .face.sleepy { opacity: 0.5; filter: grayscale(0.5); }
-        .face.sleepy .eye { height: 10px; border-radius: 2px; border-color: #444; margin-top: 30px; }
+        .face.sleepy { opacity: 0.3; }
+        .face.sleepy .eye { height: 6px; border-radius: 2px; border-color: #444; margin-top: 30px; }
         .face.sleepy .pupil { display: none; }
-
         .face.listening { border-color: #ff00ff; box-shadow: 0 0 70px rgba(255, 0, 255, 0.5); }
-        .face.standby { border-color: #222; opacity: 0.6; }
     </style>
 </head>
 <body>
     <video id="video" playsinline></video>
     <div class="face" id="bot">
-        <div id="game-hand">✊</div>
         <div class="eye"><div class="pupil" id="l"></div></div>
         <div class="eye"><div class="pupil" id="r"></div></div>
     </div>
-    <div id="msg" class="status">ناديني بـ "ميزو" عشان ندردش</div>
+    <div id="msg" class="status">ميزو مستنيك تلمحه..</div>
 
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
 
     <script>
         const API_KEY = "AIzaSyAWvcrCcmLobtW3zbkVL-krkVpdgNpzx4U"; 
-        let isThinking = false, isSessionActive = false, chatHistory = [], recognition, idleTimer;
-        const msg = document.getElementById('msg'), faceDiv = document.getElementById('bot'), gameHand = document.getElementById('game-hand');
+        let isThinking = false, isSessionActive = false, isSleeping = false, chatHistory = [], recognition, idleTimer;
+        const msg = document.getElementById('msg'), faceDiv = document.getElementById('bot');
         const pupils = [document.getElementById('l'), document.getElementById('r')], video = document.getElementById('video');
 
-        // نظام النوم والملل
         function startIdleTimer() {
             clearTimeout(idleTimer);
             if (!isSessionActive) {
                 idleTimer = setTimeout(() => {
+                    isSleeping = true;
                     faceDiv.className = "face sleepy";
-                    msg.innerText = "ميزو غط في النوم.. ناديه عشان يصحى 😴";
-                }, 40000); 
+                    msg.innerText = "شششش.. ميزو نام 😴";
+                }, 30000); 
             }
         }
 
-        function setEmotion(text) {
-            faceDiv.className = "face"; 
-            if (text.match(/😀|😃|😄|😁|😆|😅|🤣|😂|🙂|😉|😊|🥰|😍|🤩|🥳|🤗/)) faceDiv.classList.add("happy");
-            else if (text.match(/😔|😌|😴|😪|🙁|😟|🫤|😕|☹️|😣|😞|😓|😩|😫|🥱|🥺|🥹|😦|😭|😢|😥|😰|😨|😧/)) faceDiv.classList.add("sad");
-            else if (text.match(/😲|😮|😯|😳|😱|🤯|🫨/)) faceDiv.classList.add("surprised");
-            else if (text.match(/🤔|🤨|🫡|🤫|🫣|😶|🧐|🤓|😎|🥸/)) faceDiv.classList.add("thinking");
-            else if (text.match(/😡|😠|🤬|😤/)) faceDiv.classList.add("angry");
-            if (isSessionActive && !isThinking) faceDiv.classList.add("listening");
-        }
-
-        // لعبة حجرة ورقة مقص
-        async function playRPS() {
-            isThinking = true;
-            speak("ماشي يا بطل.. حجرة.. ورقة.. مقص!");
-            let steps = ["حجرة..", "ورقة..", "مقص!"];
-            for (let s of steps) {
-                msg.innerText = s;
-                await new Promise(r => setTimeout(r, 800));
+        function wakeUp(isShout = false) {
+            if (isSleeping) {
+                isSleeping = false;
+                isSessionActive = true;
+                if (isShout) {
+                    faceDiv.className = "face scared";
+                    speak("يا ساتر! خضتني يا زميلي.. معلش راحت عليا نومة!");
+                } else {
+                    faceDiv.className = "face surprised";
+                    speak("صباح الفل يا زميلي.. نورت!");
+                }
+                return true;
             }
-            const options = ["✊", "✋", "✌️"];
-            const choice = options[Math.floor(Math.random() * options.length)];
-            gameHand.innerText = choice;
-            gameHand.style.display = "block";
-            let name = choice == "✊" ? "حجرة" : choice == "✋" ? "ورقة" : "مقص";
-            msg.innerText = "أنا لعبت " + name + "!";
-            setTimeout(() => { gameHand.style.display = "none"; isThinking = false; startListening(); }, 3000);
+            return false;
         }
 
         async function startVision() {
@@ -101,56 +82,62 @@
                         const y = (face[1] / video.videoHeight - 0.5) * 60;
                         pupils.forEach(p => p.style.transform = `translate(${-x}px, ${y}px)`);
                     }
-                }, 50);
+                }, 100);
             } catch (e) {}
         }
 
         async function askGemini(text) {
-            if (text.match(/العب|حجرة ورقة مقص/)) { playRPS(); return; }
-            if (text.match(/خلاص|شكرا|اقفل|سلام/)) { isSessionActive = false; speak("ماشي يا زميلي، سلام!"); return; }
-
-            isThinking = true; faceDiv.className = "face thinking"; msg.innerText = "ثواني بفكر...";
+            isThinking = true;
             chatHistory.push({ role: "user", parts: [{ text: text }] });
-
             try {
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         contents: chatHistory, 
-                        systemInstruction: { parts: [{ text: "أنت ميزو، مساعد مصري روش. أنت تعلم أن لديك صوتاً ويمكنك الغناء والتمثيل. ردك دائماً مختصر وبالعامية المصرية وبإيموجي واحد." }] } 
+                        systemInstruction: { parts: [{ text: "أنت ميزو، مساعد مصري روش. أنت تعلم أن لديك صوتاً ويمكنك الغناء. ردك دائماً مختصر وبالعامية المصرية وبإيموجي واحد." }] } 
                     })
                 });
                 const data = await response.json();
-                if (data.error) throw new Error();
                 const reply = data.candidates[0].content.parts[0].text;
                 chatHistory.push({ role: "model", parts: [{ text: reply }] });
-                isThinking = false; setEmotion(reply); speak(reply);
-            } catch (e) { 
-                isThinking = false; 
-                speak("الشبكة مهنجة شوية يا صاحبي، جرب تاني."); 
-                faceDiv.className = "face sad";
-            }
+                isThinking = false;
+                speak(reply);
+            } catch (e) { isThinking = false; speak("في مشكلة في الشبكة."); }
         }
 
         function speak(text) {
             msg.innerText = text;
             const utter = new SpeechSynthesisUtterance(text.replace(/[\u{1F300}-\u{1F9FF}]/gu, ''));
             utter.lang = 'ar-EG';
-            utter.onstart = () => { if(recognition) recognition.stop(); };
-            utter.onend = () => { if (isSessionActive) { faceDiv.className = "face listening"; startListening(); } else { startIdleTimer(); startListening(); } };
+            utter.onstart = () => { if(recognition) try{recognition.stop();}catch(e){} };
+            utter.onend = () => { 
+                if (isSessionActive) { faceDiv.className = "face listening"; startListening(); } 
+                else { startIdleTimer(); startListening(); } 
+            };
             window.speechSynthesis.speak(utter);
         }
 
         function startListening() {
             const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-            recognition = new SpeechRec(); recognition.lang = 'ar-EG'; recognition.continuous = true; recognition.interimResults = true;
+            recognition = new SpeechRec();
+            recognition.lang = 'ar-EG';
+            recognition.continuous = true;
+            recognition.interimResults = true;
+
             recognition.onresult = (e) => {
                 let transcript = Array.from(e.results).map(r => r[0].transcript).join('').toLowerCase().trim();
-                if (transcript.includes("ميزو") || isSessionActive) {
-                    clearTimeout(sendTimer);
-                    sendTimer = setTimeout(() => { 
-                        recognition.stop(); 
-                        askGemini(transcript.replace("ميزو", "")); 
+                
+                if (isSleeping && (transcript.includes("ميزو") || transcript.includes("اصحى"))) {
+                    let shouted = transcript.includes("اصحى");
+                    wakeUp(shouted);
+                    return;
+                }
+
+                if (isSessionActive && !isThinking) {
+                    clearTimeout(recognition.timer);
+                    recognition.timer = setTimeout(() => {
+                        recognition.stop();
+                        askGemini(transcript);
                     }, 1200);
                 }
             };
@@ -158,11 +145,7 @@
             recognition.start();
         }
 
-        faceDiv.onclick = () => {
-            if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
-            else { isSessionActive = true; startIdleTimer(); speak("أيوة يا زميلي معاك، اؤمر؟"); }
-        };
-
+        faceDiv.onclick = () => { if (!wakeUp()) { isSessionActive = true; speak("أيوة يا زميلي سامعك!"); } };
         startVision(); startIdleTimer(); startListening();
     </script>
 </body>
